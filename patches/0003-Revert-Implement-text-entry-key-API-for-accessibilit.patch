@@ -1,0 +1,101 @@
+From 6d67c48acaa99342a6836cdb2e97ea140ee697ff Mon Sep 17 00:00:00 2001
+From: mimi89999 <michel@lebihan.pl>
+Date: Wed, 22 Apr 2020 00:10:25 +0200
+Subject: [PATCH] Revert "Implement text entry key API for accessibility
+ services in AOSP Keyboard"
+
+This reverts commit 389e849a421b6045dcbbc30ad1303f9fa800c214.
+---
+ .../accessibility/KeyboardAccessibilityDelegate.java  |  1 +
+ .../KeyboardAccessibilityNodeProvider.java            | 11 +++++++----
+ .../MainKeyboardAccessibilityDelegate.java            |  8 ++++++++
+ 3 files changed, 16 insertions(+), 4 deletions(-)
+
+diff --git a/java/src/com/android/inputmethod/accessibility/KeyboardAccessibilityDelegate.java b/java/src/com/android/inputmethod/accessibility/KeyboardAccessibilityDelegate.java
+index 5c03d26a9..f7a11639d 100644
+--- a/java/src/com/android/inputmethod/accessibility/KeyboardAccessibilityDelegate.java
++++ b/java/src/com/android/inputmethod/accessibility/KeyboardAccessibilityDelegate.java
+@@ -243,6 +243,7 @@ public class KeyboardAccessibilityDelegate<KV extends KeyboardView>
+         // Make sure we're not getting an EXIT event because the user slid
+         // off the keyboard area, then force a key press.
+         if (key != null) {
++            performClickOn(key);
+             onHoverExitFrom(key);
+         }
+         setLastHoverKey(null);
+diff --git a/java/src/com/android/inputmethod/accessibility/KeyboardAccessibilityNodeProvider.java b/java/src/com/android/inputmethod/accessibility/KeyboardAccessibilityNodeProvider.java
+index 7266aa88a..a3511c63f 100644
+--- a/java/src/com/android/inputmethod/accessibility/KeyboardAccessibilityNodeProvider.java
++++ b/java/src/com/android/inputmethod/accessibility/KeyboardAccessibilityNodeProvider.java
+@@ -236,7 +236,6 @@ final class KeyboardAccessibilityNodeProvider<KV extends KeyboardView>
+         // Obtain and initialize an AccessibilityNodeInfo with information about the virtual view.
+         final AccessibilityNodeInfoCompat info = AccessibilityNodeInfoCompat.obtain();
+         info.setPackageName(mKeyboardView.getContext().getPackageName());
+-        info.setTextEntryKey(true);
+         info.setClassName(key.getClass().getName());
+         info.setContentDescription(keyDescription);
+         info.setBoundsInParent(boundsInParent);
+@@ -245,9 +244,13 @@ final class KeyboardAccessibilityNodeProvider<KV extends KeyboardView>
+         info.setSource(mKeyboardView, virtualViewId);
+         info.setEnabled(key.isEnabled());
+         info.setVisibleToUser(true);
+-        info.addAction(AccessibilityNodeInfoCompat.ACTION_CLICK);
+-        if (key.isLongPressEnabled()) {
+-            info.addAction(AccessibilityNodeInfoCompat.ACTION_LONG_CLICK);
++        // Don't add ACTION_CLICK and ACTION_LONG_CLOCK actions while hovering on the key.
++        // See {@link #onHoverEnterTo(Key)} and {@link #onHoverExitFrom(Key)}.
++        if (virtualViewId != mHoveringNodeId) {
++            info.addAction(AccessibilityNodeInfoCompat.ACTION_CLICK);
++            if (key.isLongPressEnabled()) {
++                info.addAction(AccessibilityNodeInfoCompat.ACTION_LONG_CLICK);
++            }
+         }
+ 
+         if (mAccessibilityFocusedView == virtualViewId) {
+diff --git a/java/src/com/android/inputmethod/accessibility/MainKeyboardAccessibilityDelegate.java b/java/src/com/android/inputmethod/accessibility/MainKeyboardAccessibilityDelegate.java
+index 3234993cf..edda32d52 100644
+--- a/java/src/com/android/inputmethod/accessibility/MainKeyboardAccessibilityDelegate.java
++++ b/java/src/com/android/inputmethod/accessibility/MainKeyboardAccessibilityDelegate.java
+@@ -62,10 +62,13 @@ public final class MainKeyboardAccessibilityDelegate
+     // The rectangle region to ignore hover events.
+     private final Rect mBoundsToIgnoreHoverEvent = new Rect();
+ 
++    private final AccessibilityLongPressTimer mAccessibilityLongPressTimer;
+ 
+     public MainKeyboardAccessibilityDelegate(final MainKeyboardView mainKeyboardView,
+             final KeyDetector keyDetector) {
+         super(mainKeyboardView, keyDetector);
++        mAccessibilityLongPressTimer = new AccessibilityLongPressTimer(
++                this /* callback */, mainKeyboardView.getContext());
+     }
+ 
+     /**
+@@ -230,6 +233,7 @@ public final class MainKeyboardAccessibilityDelegate
+             Log.d(TAG, "onHoverEnterTo: key=" + key
+                     + " inIgnoreBounds=" + mBoundsToIgnoreHoverEvent.contains(x, y));
+         }
++        mAccessibilityLongPressTimer.cancelLongPress();
+         if (mBoundsToIgnoreHoverEvent.contains(x, y)) {
+             return;
+         }
+@@ -237,6 +241,9 @@ public final class MainKeyboardAccessibilityDelegate
+         // Further hover events should be handled.
+         mBoundsToIgnoreHoverEvent.setEmpty();
+         super.onHoverEnterTo(key);
++        if (key.isLongPressEnabled()) {
++            mAccessibilityLongPressTimer.startLongPress(key);
++        }
+     }
+ 
+     @Override
+@@ -247,6 +254,7 @@ public final class MainKeyboardAccessibilityDelegate
+             Log.d(TAG, "onHoverExitFrom: key=" + key
+                     + " inIgnoreBounds=" + mBoundsToIgnoreHoverEvent.contains(x, y));
+         }
++        mAccessibilityLongPressTimer.cancelLongPress();
+         super.onHoverExitFrom(key);
+     }
+ 
+-- 
+2.26.1
+
