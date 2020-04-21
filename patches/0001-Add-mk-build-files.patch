@@ -1,0 +1,369 @@
+From 7991ffcf864d4eb3ef29d71d9b72a7770173ccdd Mon Sep 17 00:00:00 2001
+From: mimi89999 <michel@lebihan.pl>
+Date: Tue, 21 Apr 2020 17:20:16 +0200
+Subject: [PATCH 1/2] Add mk build files
+
+---
+ native/jni/Android.mk               | 102 +++++++++++++++++++
+ native/jni/Application.mk           |   1 +
+ native/jni/CleanupNativeFileList.mk |  19 ++++
+ native/jni/NativeFileList.mk        | 146 ++++++++++++++++++++++++++++
+ native/jni/TargetUnitTests.mk       |  50 ++++++++++
+ 5 files changed, 318 insertions(+)
+ create mode 100644 native/jni/Android.mk
+ create mode 100644 native/jni/Application.mk
+ create mode 100644 native/jni/CleanupNativeFileList.mk
+ create mode 100644 native/jni/NativeFileList.mk
+ create mode 100644 native/jni/TargetUnitTests.mk
+
+diff --git a/native/jni/Android.mk b/native/jni/Android.mk
+new file mode 100644
+index 000000000..92250cc8e
+--- /dev/null
++++ b/native/jni/Android.mk
+@@ -0,0 +1,102 @@
++# Copyright (C) 2011 The Android Open Source Project
++#
++# Licensed under the Apache License, Version 2.0 (the "License");
++# you may not use this file except in compliance with the License.
++# You may obtain a copy of the License at
++#
++#      http://www.apache.org/licenses/LICENSE-2.0
++#
++# Unless required by applicable law or agreed to in writing, software
++# distributed under the License is distributed on an "AS IS" BASIS,
++# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++# See the License for the specific language governing permissions and
++# limitations under the License.
++
++LOCAL_PATH := $(call my-dir)
++
++############ some local flags
++# If you change any of those flags, you need to rebuild both libjni_latinime_common_static
++# and the shared library that uses libjni_latinime_common_static.
++FLAG_DBG ?= false
++FLAG_DO_PROFILE ?= false
++
++######################################
++include $(CLEAR_VARS)
++
++LATIN_IME_SRC_DIR := src
++
++LOCAL_C_INCLUDES += $(LOCAL_PATH)/$(LATIN_IME_SRC_DIR)
++
++LOCAL_CFLAGS += -Werror -Wall -Wextra -Weffc++ -Wformat=2 -Wcast-qual -Wcast-align \
++    -Wwrite-strings -Wfloat-equal -Wpointer-arith -Winit-self -Wredundant-decls \
++    -Woverloaded-virtual -Wsign-promo -Wno-system-headers -Wno-format-nonliteral
++
++# To suppress compiler warnings for unused variables/functions used for debug features etc.
++LOCAL_CFLAGS += -Wno-unused-parameter -Wno-unused-function
++
++# HACK: -mstackrealign is required for x86 builds running on pre-KitKat devices to avoid crashes
++# with SSE instructions.
++ifeq ($(TARGET_ARCH), x86)
++    LOCAL_CFLAGS += -mstackrealign
++endif # x86
++
++include $(LOCAL_PATH)/NativeFileList.mk
++
++LOCAL_SRC_FILES := \
++    $(LATIN_IME_JNI_SRC_FILES) \
++    $(addprefix $(LATIN_IME_SRC_DIR)/, $(LATIN_IME_CORE_SRC_FILES))
++
++ifeq ($(FLAG_DO_PROFILE), true)
++    $(warning Making profiling version of native library)
++    LOCAL_CFLAGS += -DFLAG_DO_PROFILE -funwind-tables
++else # FLAG_DO_PROFILE
++ifeq ($(FLAG_DBG), true)
++    $(warning Making debug version of native library)
++    LOCAL_CFLAGS += -DFLAG_DBG -funwind-tables -fno-inline
++ifeq ($(FLAG_FULL_DBG), true)
++    $(warning Making full debug version of native library)
++    LOCAL_CFLAGS += -DFLAG_FULL_DBG
++endif # FLAG_FULL_DBG
++endif # FLAG_DBG
++endif # FLAG_DO_PROFILE
++
++LOCAL_MODULE := libjni_latinime_common_static
++LOCAL_MODULE_TAGS := optional
++
++LOCAL_CLANG := true
++LOCAL_SDK_VERSION := 14
++LOCAL_NDK_STL_VARIANT := c++_static
++
++include $(BUILD_STATIC_LIBRARY)
++######################################
++include $(CLEAR_VARS)
++
++# All code in LOCAL_WHOLE_STATIC_LIBRARIES will be built into this shared library.
++LOCAL_WHOLE_STATIC_LIBRARIES := libjni_latinime_common_static
++
++ifeq ($(FLAG_DO_PROFILE), true)
++    $(warning Making profiling version of native library)
++    LOCAL_LDFLAGS += -llog
++else # FLAG_DO_PROFILE
++ifeq ($(FLAG_DBG), true)
++    $(warning Making debug version of native library)
++    LOCAL_LDFLAGS += -llog
++endif # FLAG_DBG
++endif # FLAG_DO_PROFILE
++
++LOCAL_MODULE := libjni_latinime
++LOCAL_MODULE_TAGS := optional
++
++LOCAL_CLANG := true
++LOCAL_SDK_VERSION := 14
++LOCAL_NDK_STL_VARIANT := c++_static
++LOCAL_CFLAGS := -Wall -Werror
++LOCAL_LDFLAGS += -ldl
++
++include $(BUILD_SHARED_LIBRARY)
++#################### Clean up the tmp vars
++include $(LOCAL_PATH)/CleanupNativeFileList.mk
++
++#################### Unit test on target environment
++include $(LOCAL_PATH)/TargetUnitTests.mk
++//LOCAL_CFLAGS += -Wall -Werror
+diff --git a/native/jni/Application.mk b/native/jni/Application.mk
+new file mode 100644
+index 000000000..ce095350e
+--- /dev/null
++++ b/native/jni/Application.mk
+@@ -0,0 +1 @@
++APP_STL := c++_static
+diff --git a/native/jni/CleanupNativeFileList.mk b/native/jni/CleanupNativeFileList.mk
+new file mode 100644
+index 000000000..eed6f1e63
+--- /dev/null
++++ b/native/jni/CleanupNativeFileList.mk
+@@ -0,0 +1,19 @@
++# Copyright (C) 2013 The Android Open Source Project
++#
++# Licensed under the Apache License, Version 2.0 (the "License");
++# you may not use this file except in compliance with the License.
++# You may obtain a copy of the License at
++#
++#      http://www.apache.org/licenses/LICENSE-2.0
++#
++# Unless required by applicable law or agreed to in writing, software
++# distributed under the License is distributed on an "AS IS" BASIS,
++# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++# See the License for the specific language governing permissions and
++# limitations under the License.
++
++LATIN_IME_CORE_SRC_FILES :=
++LATIN_IME_CORE_SRC_FILES_BACKWARD_V401 :=
++LATIN_IME_CORE_TEST_FILES :=
++LATIN_IME_JNI_SRC_FILES :=
++LATIN_IME_SRC_DIR :=
+diff --git a/native/jni/NativeFileList.mk b/native/jni/NativeFileList.mk
+new file mode 100644
+index 000000000..d8b69bfd7
+--- /dev/null
++++ b/native/jni/NativeFileList.mk
+@@ -0,0 +1,146 @@
++# Copyright (C) 2013 The Android Open Source Project
++#
++# Licensed under the Apache License, Version 2.0 (the "License");
++# you may not use this file except in compliance with the License.
++# You may obtain a copy of the License at
++#
++#      http://www.apache.org/licenses/LICENSE-2.0
++#
++# Unless required by applicable law or agreed to in writing, software
++# distributed under the License is distributed on an "AS IS" BASIS,
++# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++# See the License for the specific language governing permissions and
++# limitations under the License.
++
++LATIN_IME_JNI_SRC_FILES := \
++    com_android_inputmethod_keyboard_ProximityInfo.cpp \
++    com_android_inputmethod_latin_BinaryDictionary.cpp \
++    com_android_inputmethod_latin_BinaryDictionaryUtils.cpp \
++    com_android_inputmethod_latin_DicTraverseSession.cpp \
++    jni_common.cpp
++
++LATIN_IME_CORE_SRC_FILES := \
++    $(addprefix dictionary/header/, \
++        header_policy.cpp \
++        header_read_write_utils.cpp) \
++    dictionary/property/ngram_context.cpp \
++    dictionary/structure/dictionary_structure_with_buffer_policy_factory.cpp \
++    $(addprefix dictionary/structure/pt_common/, \
++        bigram/bigram_list_read_write_utils.cpp \
++        dynamic_pt_gc_event_listeners.cpp \
++        dynamic_pt_reading_helper.cpp \
++        dynamic_pt_reading_utils.cpp \
++        dynamic_pt_updating_helper.cpp \
++        dynamic_pt_writing_utils.cpp \
++        patricia_trie_reading_utils.cpp \
++        shortcut/shortcut_list_reading_utils.cpp) \
++    $(addprefix dictionary/structure/v2/, \
++        patricia_trie_policy.cpp \
++        ver2_patricia_trie_node_reader.cpp \
++        ver2_pt_node_array_reader.cpp) \
++    $(addprefix dictionary/structure/v4/, \
++        ver4_dict_buffers.cpp \
++        ver4_dict_constants.cpp \
++        ver4_patricia_trie_node_reader.cpp \
++        ver4_patricia_trie_node_writer.cpp \
++        ver4_patricia_trie_policy.cpp \
++        ver4_patricia_trie_reading_utils.cpp \
++        ver4_patricia_trie_writing_helper.cpp \
++        ver4_pt_node_array_reader.cpp) \
++    $(addprefix dictionary/structure/v4/content/, \
++        dynamic_language_model_probability_utils.cpp \
++        language_model_dict_content.cpp \
++        language_model_dict_content_global_counters.cpp \
++        shortcut_dict_content.cpp \
++        sparse_table_dict_content.cpp \
++        terminal_position_lookup_table.cpp) \
++    $(addprefix dictionary/utils/, \
++        buffer_with_extendable_buffer.cpp \
++        byte_array_utils.cpp \
++        dict_file_writing_utils.cpp \
++        file_utils.cpp \
++        forgetting_curve_utils.cpp \
++        format_utils.cpp \
++        mmapped_buffer.cpp \
++        multi_bigram_map.cpp \
++        probability_utils.cpp \
++        sparse_table.cpp \
++        trie_map.cpp ) \
++    suggest/core/suggest.cpp \
++    $(addprefix suggest/core/dicnode/, \
++        dic_node.cpp \
++        dic_node_utils.cpp \
++        dic_nodes_cache.cpp) \
++    $(addprefix suggest/core/dictionary/, \
++        dictionary.cpp \
++        dictionary_utils.cpp \
++        digraph_utils.cpp \
++        error_type_utils.cpp ) \
++    $(addprefix suggest/core/layout/, \
++        additional_proximity_chars.cpp \
++        proximity_info.cpp \
++        proximity_info_params.cpp \
++        proximity_info_state.cpp \
++        proximity_info_state_utils.cpp) \
++    suggest/core/policy/weighting.cpp \
++    suggest/core/session/dic_traverse_session.cpp \
++    $(addprefix suggest/core/result/, \
++        suggestion_results.cpp \
++        suggestions_output_utils.cpp) \
++    suggest/policyimpl/gesture/gesture_suggest_policy_factory.cpp \
++    $(addprefix suggest/policyimpl/typing/, \
++        scoring_params.cpp \
++        typing_scoring.cpp \
++        typing_suggest_policy.cpp \
++        typing_traversal.cpp \
++        typing_weighting.cpp) \
++    $(addprefix utils/, \
++        autocorrection_threshold_utils.cpp \
++        char_utils.cpp \
++        jni_data_utils.cpp \
++        log_utils.cpp \
++        time_keeper.cpp)
++
++LATIN_IME_CORE_SRC_FILES_BACKWARD_V402 := \
++    $(addprefix dictionary/structure/backward/v402/, \
++        ver4_dict_buffers.cpp \
++        ver4_dict_constants.cpp \
++        ver4_patricia_trie_node_reader.cpp \
++        ver4_patricia_trie_node_writer.cpp \
++        ver4_patricia_trie_policy.cpp \
++        ver4_patricia_trie_reading_utils.cpp \
++        ver4_patricia_trie_writing_helper.cpp \
++        ver4_pt_node_array_reader.cpp) \
++    $(addprefix dictionary/structure/backward/v402/content/, \
++        bigram_dict_content.cpp \
++        probability_dict_content.cpp \
++        shortcut_dict_content.cpp \
++        sparse_table_dict_content.cpp \
++        terminal_position_lookup_table.cpp) \
++    $(addprefix dictionary/structure/backward/v402/bigram/, \
++        ver4_bigram_list_policy.cpp)
++
++LATIN_IME_CORE_SRC_FILES += $(LATIN_IME_CORE_SRC_FILES_BACKWARD_V402)
++
++LATIN_IME_CORE_TEST_FILES := \
++    defines_test.cpp \
++    dictionary/header/header_read_write_utils_test.cpp \
++    dictionary/structure/v4/content/language_model_dict_content_test.cpp \
++    dictionary/structure/v4/content/language_model_dict_content_global_counters_test.cpp \
++    dictionary/structure/v4/content/probability_entry_test.cpp \
++    dictionary/structure/v4/content/terminal_position_lookup_table_test.cpp \
++    dictionary/utils/bloom_filter_test.cpp \
++    dictionary/utils/buffer_with_extendable_buffer_test.cpp \
++    dictionary/utils/byte_array_utils_test.cpp \
++    dictionary/utils/format_utils_test.cpp \
++    dictionary/utils/probability_utils_test.cpp \
++    dictionary/utils/sparse_table_test.cpp \
++    dictionary/utils/trie_map_test.cpp \
++    suggest/core/dicnode/dic_node_pool_test.cpp \
++    suggest/core/layout/geometry_utils_test.cpp \
++    suggest/core/layout/normal_distribution_2d_test.cpp \
++    suggest/policyimpl/utils/damerau_levenshtein_edit_distance_policy_test.cpp \
++    utils/autocorrection_threshold_utils_test.cpp \
++    utils/char_utils_test.cpp \
++    utils/int_array_view_test.cpp \
++    utils/time_keeper_test.cpp
+diff --git a/native/jni/TargetUnitTests.mk b/native/jni/TargetUnitTests.mk
+new file mode 100644
+index 000000000..32aada057
+--- /dev/null
++++ b/native/jni/TargetUnitTests.mk
+@@ -0,0 +1,50 @@
++# Copyright (C) 2014 The Android Open Source Project
++#
++# Licensed under the Apache License, Version 2.0 (the "License");
++# you may not use this file except in compliance with the License.
++# You may obtain a copy of the License at
++#
++#      http://www.apache.org/licenses/LICENSE-2.0
++#
++# Unless required by applicable law or agreed to in writing, software
++# distributed under the License is distributed on an "AS IS" BASIS,
++# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++# See the License for the specific language governing permissions and
++# limitations under the License.
++
++LOCAL_PATH := $(call my-dir)
++
++######################################
++include $(CLEAR_VARS)
++
++include $(LOCAL_PATH)/NativeFileList.mk
++
++#################### Target library for unit test
++LATIN_IME_SRC_DIR := src
++LOCAL_CFLAGS += -Wno-unused-parameter -Wno-unused-function -Wall -Werror
++LOCAL_C_INCLUDES += $(LOCAL_PATH)/$(LATIN_IME_SRC_DIR)
++LOCAL_MODULE := liblatinime_target_static_for_unittests
++LOCAL_MODULE_TAGS := optional
++LOCAL_SRC_FILES := $(addprefix $(LATIN_IME_SRC_DIR)/, $(LATIN_IME_CORE_SRC_FILES))
++LOCAL_SDK_VERSION := 14
++LOCAL_NDK_STL_VARIANT := c++_static
++include $(BUILD_STATIC_LIBRARY)
++
++#################### Target native tests
++include $(CLEAR_VARS)
++LATIN_IME_TEST_SRC_DIR := tests
++LOCAL_CFLAGS += -Wno-unused-parameter -Wno-unused-function -Wall -Werror
++LOCAL_C_INCLUDES += $(LOCAL_PATH)/$(LATIN_IME_SRC_DIR)
++LOCAL_MODULE := liblatinime_target_unittests
++LOCAL_MODULE_TAGS := tests
++LOCAL_SRC_FILES :=  \
++    $(addprefix $(LATIN_IME_TEST_SRC_DIR)/, $(LATIN_IME_CORE_TEST_FILES))
++LOCAL_STATIC_LIBRARIES += liblatinime_target_static_for_unittests
++LOCAL_SDK_VERSION := 14
++LOCAL_NDK_STL_VARIANT := c++_static
++include $(BUILD_NATIVE_TEST)
++
++#################### Clean up the tmp vars
++LATIN_IME_SRC_DIR :=
++LATIN_IME_TEST_SRC_DIR :=
++include $(LOCAL_PATH)/CleanupNativeFileList.mk
+-- 
+2.26.1
+
